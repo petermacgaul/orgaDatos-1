@@ -1,17 +1,21 @@
 ToDo:
 
-Hacer
+·Hacer
 Boxplot de top 5 de propiedades
 
-Hacer
+·Hacer
 Boxplot de top 5 provincias 
 
-Analizar
+·Analizar
 vivienda = ["Apartamento","Casa","Casa en condominio","Departamento compartido","Duplex","Edificio"]
 
-Analizar (En especial para distrito federal)
+·Analizar (En especial para distrito federal)
 comercial= ["Local Comercial","Local en centro comercial","Bodega comercial","Terreno comercial","Oficina comercial"]
 
-top5prov = ["Distrito Federal","Jalisco","Querétaro","Nuevo León","Edo. de México"]
+·top5prov = ["Distrito Federal","Jalisco","Querétaro","Nuevo León","Edo. de México"]
 
-Analizar en especial Distrito Federal --> 
+·Analizar en especial Distrito Federal --> En especial para los comercios
+
+·06-WordFreq
+
+·Mejorar visual de graficos faciles
