@@ -1,21 +1,42 @@
 ToDo:
+-----------------------------------------------------------------------------------------------
+Analisis para hacer
+
+
+·Analizar
+todo para 2 habitaciones → podemos clasificarlo como "Familia standard"
+
+·Analizar
+vivienda = ["Apartamento","Casa","Casa en condominio","Departamento compartido","Duplex","Edificio"]
+cercania a escuelas.
+
+·Analizar (En especial para distrito federal)
+comercial= ["Local Comercial","Local en centro comercial","Bodega comercial","Terreno comercial","Oficina comercial"]
+cercania a centros comerciales.
+
+·Analisis de Distrito Federal (Por ser la capital)
+
+·Analizar las provincias mas caras
+top5prov = ["Distrito Federal","Jalisco","Querétaro","Nuevo León","Edo. de México"]
+
+·Analizar en especial Distrito Federal --> En especial para los comercios
+
+-----------------------------------------------------------------------------------------------
+Verificar
+
+·Mejorar visual de graficos faciles
+
+·Cambiar nombre de variables para que sean mas representativos
+
+·Ver si estan todos los titulos y las axes
+
+-----------------------------------------------------------------------------------------------
+Ver si se puede hacer
 
 ·Hacer
 Boxplot de top 5 de propiedades
 
 ·Hacer
-Boxplot de top 5 provincias 
-
-·Analizar
-vivienda = ["Apartamento","Casa","Casa en condominio","Departamento compartido","Duplex","Edificio"]
-
-·Analizar (En especial para distrito federal)
-comercial= ["Local Comercial","Local en centro comercial","Bodega comercial","Terreno comercial","Oficina comercial"]
-
-·top5prov = ["Distrito Federal","Jalisco","Querétaro","Nuevo León","Edo. de México"]
-
-·Analizar en especial Distrito Federal --> En especial para los comercios
+Boxplot de top 5 provincias
 
 ·06-WordFreq
-
-·Mejorar visual de graficos faciles
