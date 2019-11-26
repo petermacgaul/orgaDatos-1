@@ -2,65 +2,70 @@ from sklearn import metrics
 import category_encoders as ce
 import time
 
+from sklearn.metrics import mean_absolute_error
 
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import Imputer
 from sklearn.preprocessing import LabelEncoder
 
-
 import pandas as pd
 import numpy as np
 
-def normalizar(df):
-    min_max_scaler = MinMaxScaler()
-    cols = df._get_numeric_data().columns
-    sub_df = df[cols]
-    res = df.drop(columns=cols)
-    x_scaled = min_max_scaler.fit_transform(sub_df)
-    x_scaled = pd.DataFrame(x_scaled,columns=cols)
-    return res.join(x_scaled)
+import category_encoders as ce
 
-def imputar(df):
-    imp = SimpleImputer()
-    cols = df._get_numeric_data().columns
-    for x in cols:
-        df[x]=imp.fit_transform(df[[x]])
+def getDropCols():
+    return ['titulo', 'descripcion', 'direccion'] # temporal
 
-def completar_categoricos(df):
-    imp = SimpleImputer(strategy="constant")
+def getOneHotCols():
+    return ['tipodepropiedad', 'provincia']
 
-    df["provincia"] = imp.fit_transform(df[["provincia"]])
-    df["ciudad"] = imp.fit_transform(df[["ciudad"]])
-    df["tipodepropiedad"] = imp.fit_transform(df[["tipodepropiedad"]])
-    df['ciudad-provincia'] = df[['ciudad', 'provincia']].apply(lambda x: ', '.join(x), axis=1)
-    return
+def getBinaryCols():
+    return ['ciudad', 'idzona']
 
-def contiene(df, columna, palabra):
-    return df[columna].str.contains(palabra).astype(int)
+def fill_m2(df):
+    df['metrostotales'].fillna(df['metroscubiertos'], inplace=True)
+    df['metroscubiertos'].fillna(df['metrostotales'], inplace=True)
 
-def contiene_alguna(df, columna, palabras):
-    result = df[columna].apply(lambda x: 0)
-    for palabra in palabras:
-        result = result | contiene(df, columna, palabra)
-    return result
-
-
-def main(x):
-    start_time = time.time()
-    df = x.copy()
-    df["descripcion"] = df["descripcion"].fillna("")
-    df["titulo"] = df["titulo"].fillna("")
-    df['fecha'] = pd.to_datetime(df['fecha'])
-    df['anio'] = df['fecha'].dt.year
-    df["mes"] = df['fecha'].dt.month
-    df["dia"] = df['fecha'].dt.day
-    features_palabras(df)
-    completar_categoricos(df)
-    imputar(df)
-    df = df.drop(columns=["fecha","descripcion","titulo","direccion"])
-    print("--- %s seconds ---" % (time.time() - start_time))
     return df
+
+def main(x, OHE, BE, encodingType):
+    start_time = time.time()
+    features = x.copy()
+    drop_cols = getDropCols()
+    features = features.drop(drop_cols, axis=1)
+
+    features[features.idzona > 500000] = np.nan
+    features['fecha'] = pd.to_datetime(features['fecha'])
+    features['anio'] = features['fecha'].dt.year
+    features["mes"] = features['fecha'].dt.month
+    features["dia"] = features['fecha'].dt.day
+
+    features["metroscubiertostotales"]=features["metroscubiertos"]+features["metrostotales"]
+    features["ambientes"]=features["banos"]+features["habitaciones"]
+    features["ambientesygarage"]=features["banos"]+features["habitaciones"]+features["garages"]+features["piscina"]
+    features["centrosyescuelas"]=features["centroscomercialescercanos"]+features["escuelascercanas"]
+
+    if (encodingType == 'train'):
+        features = OHE.fit_transform(features)
+        features = BE.fit_transform(features)
+    else:
+        features = OHE.transform(features)
+        features = BE.transform(features)
+
+    drop_cols = getOneHotCols()
+    drop_cols.extend(getBinaryCols())
+
+    features = fill_m2(features)
+
+
+
+
+    #features_palabras(features)
+    imputar(features)
+
+    print("--- %s seconds ---" % (time.time() - start_time))
+    return features
 
 def OHE(df,cols):
     encoder = ce.OneHotEncoder()
@@ -83,7 +88,6 @@ def leave(df,cols):
     df = df.join(encoded)
     return df
 
-
 def binary(df,cols):
     encoder = ce.BinaryEncoder()
     encoded = encoder.fit_transform(df[cols])
@@ -98,9 +102,29 @@ def target(df,cols,target):
     df = df.join(encoded)
     return df
 
+def predecir(model, train_features, train_labels, test_features, test_labels):
+    predict = model.predict(test_features)
+    error = mean_absolute_error(test_labels, predict)
+    score = model.score(test_features,test_labels)
+
+    print('Entrenamiento: {:0.4f}%'.format(model.score(train_features, train_labels)*100))
+    print('Testeo: {:0.4f}%.'.format(score*100))
+    print('Mean abs error: {:0.4f}.'.format(error))
+
+def contiene(df, columna, palabra):
+    return df[columna].str.contains(palabra).astype(int)
+
+def contiene_alguna(df, columna, palabras):
+    result = df[columna].apply(lambda x: 0)
+    for palabra in palabras:
+        result = result | contiene(df, columna, palabra)
+    return result
+
 def features_palabras(df):
     # del wordcloud
     df["largo_descripcion"] = df["descripcion"].transform(lambda x: len(x))
+    df["largo_titulo"] = df["titulo"].transform(lambda x: len(x))
+    df["largo_direccion"] = df["direccion"].transform(lambda x: len(x))
     df["palabra_hermosa"] = contiene_alguna(df, "descripcion", ["hermosa", "bonita", "bonito", "linda", "cholula", "cholulo", "preciosa", "precioso"]) | contiene_alguna(df, "titulo", ["hermosa", "bonita", "bonito", "linda", "cholula", "cholulo", "precioso", "preciosa"])
     df["palabra_excelente"] = contiene_alguna(df, "descripcion", ["excelente", "excelentes"]) | contiene_alguna(df, "titulo", ["excelente", "excelentes"])
     df["palabra_mejor"] = contiene_alguna(df, "descripcion", ["mejor", "mejores"]) | contiene_alguna(df, "titulo", ["mejor", "mejores"])
@@ -158,19 +182,3 @@ def features_palabras(df):
     df["palabra_pileta"] = contiene_alguna(df, "descripcion", ["pileta", "piscina", "jacuzzi"]) | contiene_alguna(df, "titulo", ["pileta", "piscina", "jacuzzi"])
     df["palabra_solarium"] = contiene_alguna(df, "descripcion", ["solarium"]) | contiene_alguna(df, "titulo", ["solarium"])
     df["palabra_gas"] = contiene_alguna(df, "descripcion", ["gas", "estufa"]) | contiene_alguna(df, "titulo", ["gas", "estufa"])
-
-
-from sklearn.metrics import mean_absolute_error
-
-def predecir(model, train_features, train_labels, test_features, test_labels):
-    predict = model.predict(test_features)
-    error = mean_absolute_error(test_labels, predict)
-    score = model.score(test_features,test_labels)
-
-    print('Entrenamiento: {:0.4f}%'.format(model.score(train_features, train_labels)*100))
-    print('Testeo: {:0.4f}%.'.format(score*100))
-    print('Mean abs error: {:0.4f}.'.format(error))
-
-def transformar(df,colums,func):
-    for x in colums:
-        df[x]=df[x].transform(lambda y: func(y))
