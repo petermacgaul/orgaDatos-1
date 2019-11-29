@@ -14,6 +14,52 @@ import numpy as np
 
 import category_encoders as ce
 
+import re
+import string
+from nltk.tokenize import word_tokenize
+
+from stop_words import get_stop_words
+
+from nltk.stem import SnowballStemmer
+
+stemmer = SnowballStemmer('spanish')
+#No lo use pero iria en la linea 35
+#            filtered_sentence.append(stemmer.stem(w))
+
+stopwords = get_stop_words('spanish')
+
+def remove_stopwords(text,stopwords):
+    word_tokens = word_tokenize(text)
+    filtered_sentence = [w for w in word_tokens if not w in stopwords] 
+    filtered_sentence = []
+    for w in word_tokens: 
+        if w not in stopwords: 
+            filtered_sentence.append(w)
+    return " ".join(filtered_sentence)
+
+def clean_text_round(text):
+    '''Make text lowercase, remove text in square brackets, remove punctuation and remove words containing numbers.'''
+    text = text.lower()
+    text = re.sub('\[&;.*?¿\‘’“”…«»]\%;', '', text)
+    text = re.sub('[%s]' % re.escape(string.punctuation), ' ', text)
+    text = re.sub('\w*\d\w*', ' ', text)
+    text = re.sub('\n', ' ', text)
+    text = re.sub('\x95', ' ', text)
+    text = re.sub('acute', '', text)
+    text = re.sub('tilde', '', text)
+    text = re.sub(' p ', '', text)
+    text = re.sub('nbsp', '', text)
+    text = re.sub('á', 'a', text)
+    text = re.sub('é', 'e', text)
+    text = re.sub('í', 'i', text)
+    text = re.sub('ó', 'o', text)
+    text = re.sub('ú', 'u', text)
+    return text
+
+def limpiar_texto(text):
+    return remove_stopwords(clean_text_round(text),stopwords)
+
+
 def getDropCols():
     return ['titulo', 'descripcion', 'direccion'] # temporal
 
@@ -23,84 +69,79 @@ def getOneHotCols():
 def getBinaryCols():
     return ['ciudad', 'idzona']
 
+def getAllCols():
+    return ['ciudad', 'idzona', 'tipodepropiedad', 'provincia']  
+
+def getTargetCols():
+    return ['ciudad_targ', 'idzona_targ', 'tipodepropiedad_targ', 'provincia_targ']    
+
+
 def fill_m2(df):
     df['metrostotales'].fillna(df['metroscubiertos'], inplace=True)
     df['metroscubiertos'].fillna(df['metrostotales'], inplace=True)
-
+    df["metroscubiertostotales"]=df["metroscubiertos"]+df["metrostotales"]
+    df["mtotlog"] = df['metrostotales'].transform(lambda x: np.log(x))
+    df["mcublog"] = df['metroscubiertos'].transform(lambda x: np.log(x))
+    df["m2log"]   = df['metroscubiertostotales'].transform(lambda x: np.log(x))
     return df
 
-def main(x, OHE, BE, encodingType):
-    start_time = time.time()
+def init_test(x):
     features = x.copy()
-    drop_cols = getDropCols()
-    features = features.drop(drop_cols, axis=1)
-
-    features[features.idzona > 500000] = np.nan
+    
     features['fecha'] = pd.to_datetime(features['fecha'])
+    
     features['anio'] = features['fecha'].dt.year
     features["mes"] = features['fecha'].dt.month
     features["dia"] = features['fecha'].dt.day
+    
+    features = features.drop(columns=["lat","lng"])
+  
+    features["descripcion"] = features["descripcion"].fillna("").transform(lambda x: limpiar_texto(x))
+    features["titulo"] = features["titulo"].fillna("").transform(lambda x: limpiar_texto(x))
+    features["direccion"] = features["direccion"].fillna("").transform(lambda x: limpiar_texto(x))
+    features_palabras(features)
+    return features
+    
+def preprocess(x, encode1, encode2, encodingType, encode3=None, y = None):
+    start_time = time.time()
+   
+    features = x.copy()
 
-    features["metroscubiertostotales"]=features["metroscubiertos"]+features["metrostotales"]
-    features["ambientes"]=features["banos"]+features["habitaciones"]
-    features["ambientesygarage"]=features["banos"]+features["habitaciones"]+features["garages"]+features["piscina"]
-    features["centrosyescuelas"]=features["centroscomercialescercanos"]+features["escuelascercanas"]
+    drop_cols = getDropCols()
+    features = features.drop(drop_cols, axis=1)
 
+    features['fecha'] = pd.to_datetime(features['fecha'], errors='coerce').astype(int) / 10**9
+
+    features = fill_m2(features)
+        
     if (encodingType == 'train'):
-        features = OHE.fit_transform(features)
-        features = BE.fit_transform(features)
+        if encode3:
+            encode3.set_params(cols=getTargetCols())
+            features = encode3.fit_transform(features,y)
+        encode1.set_params(cols=getOneHotCols())
+        encode2.set_params(cols=getBinaryCols())
+        features = encode1.fit_transform(features)
+        features = encode2.fit_transform(features)
     else:
-        features = OHE.transform(features)
-        features = BE.transform(features)
-
+        if encode3:
+            features = encode3.transform(features)
+        features = encode1.transform(features)
+        features = encode2.transform(features)
+        
     drop_cols = getOneHotCols()
     drop_cols.extend(getBinaryCols())
 
-    features = fill_m2(features)
 
+    features_with_nans = features.columns[features.isna().any()].tolist()
 
-
+    for feature in features_with_nans:
+        features[feature] = features[feature].fillna(0)
 
     #features_palabras(features)
-    imputar(features)
-
     print("--- %s seconds ---" % (time.time() - start_time))
     return features
 
-def OHE(df,cols):
-    encoder = ce.OneHotEncoder()
-    encoded = encoder.fit_transform(df[cols])
-    df = df.drop(columns=cols)
-    df = df.join(encoded)
-    return df
 
-def label(df,cols):
-    encoder = LabelEncoder()
-    encoded = encoder.fit_transform(df[cols])
-    df = df.drop(columns=cols)
-    df = df.join(encoded)
-    return df
-
-def leave(df,cols):
-    encoder = ce.LeaveOneOutEncoder()
-    encoded = encoder.fit_transform(df[cols])
-    df = df.drop(columns=cols)
-    df = df.join(encoded)
-    return df
-
-def binary(df,cols):
-    encoder = ce.BinaryEncoder()
-    encoded = encoder.fit_transform(df[cols])
-    df = df.drop(columns=cols)
-    df = df.join(encoded)
-    return df
-
-def target(df,cols,target):
-    encoder = ce.TargetEncoder()
-    encoded = encoder.fit_transform(df[cols],target)
-    df = df.drop(columns=cols)
-    df = df.join(encoded)
-    return df
 
 def predecir(model, train_features, train_labels, test_features, test_labels):
     predict = model.predict(test_features)
@@ -110,6 +151,8 @@ def predecir(model, train_features, train_labels, test_features, test_labels):
     print('Entrenamiento: {:0.4f}%'.format(model.score(train_features, train_labels)*100))
     print('Testeo: {:0.4f}%.'.format(score*100))
     print('Mean abs error: {:0.4f}.'.format(error))
+
+
 
 def contiene(df, columna, palabra):
     return df[columna].str.contains(palabra).astype(int)
@@ -121,10 +164,6 @@ def contiene_alguna(df, columna, palabras):
     return result
 
 def features_palabras(df):
-    # del wordcloud
-    df["largo_descripcion"] = df["descripcion"].transform(lambda x: len(x))
-    df["largo_titulo"] = df["titulo"].transform(lambda x: len(x))
-    df["largo_direccion"] = df["direccion"].transform(lambda x: len(x))
     df["palabra_hermosa"] = contiene_alguna(df, "descripcion", ["hermosa", "bonita", "bonito", "linda", "cholula", "cholulo", "preciosa", "precioso"]) | contiene_alguna(df, "titulo", ["hermosa", "bonita", "bonito", "linda", "cholula", "cholulo", "precioso", "preciosa"])
     df["palabra_excelente"] = contiene_alguna(df, "descripcion", ["excelente", "excelentes"]) | contiene_alguna(df, "titulo", ["excelente", "excelentes"])
     df["palabra_mejor"] = contiene_alguna(df, "descripcion", ["mejor", "mejores"]) | contiene_alguna(df, "titulo", ["mejor", "mejores"])
@@ -182,3 +221,7 @@ def features_palabras(df):
     df["palabra_pileta"] = contiene_alguna(df, "descripcion", ["pileta", "piscina", "jacuzzi"]) | contiene_alguna(df, "titulo", ["pileta", "piscina", "jacuzzi"])
     df["palabra_solarium"] = contiene_alguna(df, "descripcion", ["solarium"]) | contiene_alguna(df, "titulo", ["solarium"])
     df["palabra_gas"] = contiene_alguna(df, "descripcion", ["gas", "estufa"]) | contiene_alguna(df, "titulo", ["gas", "estufa"])
+    df["direc_privada"] = contiene_alguna(df, "direccion", ["privada","priv","privado"]) 
+    df["direc_av"] = contiene_alguna(df, "direccion", ["av", "avenida"]) 
+    df["direc_camino"] = contiene_alguna(df, "direccion", ["playa"]) 
+    df["direc_playa"] = contiene_alguna(df, "direccion", ["camino"]) 
