@@ -53,7 +53,7 @@ def getDropCols():
 
 
 def getOneHotCols():
-    return ['tipodepropiedad', 'provincia', "anio", "mes"]
+    return ['tipodepropiedad', 'provincia', "anio", "mes", "garages"]
 
 def getBinaryCols():
     return ['ciudad', 'idzona']
@@ -120,7 +120,7 @@ def init_test(x):
     return features
     
 def preprocess(x, encode1, encode2, encodingType,
-               encode3=None,encode4=None,encode5=None,encode6=None,encode7=None,encode8=None,
+               encode3=None,encode4=None,encode5=None,encode6=None,encode7=None,encode8=None,encode9=None,
                y1 = None ):
 
     start_time = time.time()
